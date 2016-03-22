@@ -63,6 +63,8 @@ void HomeEasyByNoopy::buildFrame(int* frame, unsigned long controller, unsigned 
 }
 
 void HomeEasyByNoopy::sendFrame(int* frame, int count) {
+  unsigned char sreg;
+  sreg = SREG;
   cli(); // disable interupts
   
   while (count-- > 0) {
@@ -76,7 +78,7 @@ void HomeEasyByNoopy::sendFrame(int* frame, int count) {
     }
   }
   startEndFrame();
-  sei(); // enable interupts
+  SREG = sreg; // enable interupts
 }
 
 void HomeEasyByNoopy::emit (unsigned long controller, unsigned char device, bool onOff) {
