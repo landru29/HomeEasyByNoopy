@@ -1,11 +1,11 @@
 #include <HomeEasyByNoopy.h>
 
 // create a sender on pin 4
-HomeEasyByNoopy sender(4);
+HomeEasyByNoopy sender(4, 0);
 
 void setup() {
   // the frame will be repeated  15 times (default is 10)
-  sender.setFrameCount(15);
+  sender.setEmitFrameCount(15);
 }
 
 void loop() {

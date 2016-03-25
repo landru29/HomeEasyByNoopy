@@ -25,10 +25,12 @@
 class HomeEasyByNoopy
 {
   public:
-    HomeEasyByNoopy (int pinOut);
+    HomeEasyByNoopy (int pinOut, int pinIn);
     
     void emit (unsigned long controller, unsigned char device, bool onOff);
-    void setFrameCount(int count);
+    void setEmitFrameCount(int count);
+    void EnableRead(unsigned char onOffState);
+    unsigned char getRecieveCommand(unsigned long* controller, unsigned int* device, unsigned char* onOff, unsigned char* global);
   
   private :
     int _pinOut;
@@ -36,10 +38,25 @@ class HomeEasyByNoopy
     
     void startEndFrame();
     void startEmit();
-    
+    static unsigned int getTimer();
+    static void decoderecieve_command(unsigned long _recieve_command);
+    static void process();
+    void setListenPin(int pin);
     static void setBit(int* framePart, bool state);
     void buildFrame(int* frame, unsigned long controller, unsigned char device, bool onOff);
     void sendFrame(int* frame, int count);
+    
+    static int recieve_pin;
+    static unsigned char recieve_isSignal;
+    static unsigned char recieve_flags[2];
+    static unsigned long recieve_command[2];
+    static unsigned char recieve_commandCursor;
+    static unsigned long recieve_controller;
+    static unsigned int  recieve_device;
+    static unsigned char recieve_onOff;
+    static unsigned char recieve_global;
+    static unsigned long recieve_commandFrame;
+    static unsigned char recieve_sreg;
     
 };
 
