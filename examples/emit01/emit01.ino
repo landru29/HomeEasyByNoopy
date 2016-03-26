@@ -1,7 +1,7 @@
 #include <HomeEasyByNoopy.h>
 
 // create a sender on pin 4
-HomeEasyByNoopy sender(4, 0);
+HomeEasyByNoopy sender(4, 0, 0);
 
 void setup() {
   // the frame will be repeated  15 times (default is 10)

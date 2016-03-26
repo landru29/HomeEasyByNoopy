@@ -1,6 +1,5 @@
 #include "HomeEasyByNoopy.h"
 
-
 extern "C" {
   // AVR LibC Includes
   #include <inttypes.h>
@@ -14,23 +13,31 @@ const int _he_pulse_low1  = 1225;
 const int _he_pulse_frame = 2675;
 const int _he_pulse_emit  = 9900;
 
-int HomeEasyByNoopy::recieve_pin = 0;
-unsigned char HomeEasyByNoopy::recieve_isSignal = 0;
-unsigned char HomeEasyByNoopy::recieve_flags[2] = {0,0};
-unsigned long HomeEasyByNoopy::recieve_command[2] = {0,0};
-unsigned char HomeEasyByNoopy::recieve_commandCursor = 0;
-unsigned long HomeEasyByNoopy::recieve_controller = 0;
-unsigned int HomeEasyByNoopy::recieve_device = 0;
-unsigned char HomeEasyByNoopy::recieve_onOff = 0;
-unsigned char HomeEasyByNoopy::recieve_global = 0;
-unsigned long HomeEasyByNoopy::recieve_commandFrame = 0;
-unsigned char HomeEasyByNoopy::recieve_sreg=0;
+int                     HomeEasyByNoopy::receive_pin           = 0;
+unsigned char           HomeEasyByNoopy::receive_isSignal      = 0;
+unsigned char           HomeEasyByNoopy::receive_flags[2]      = {0,0};
+unsigned long           HomeEasyByNoopy::receive_command[2]    = {0,0};
+unsigned char           HomeEasyByNoopy::receive_commandCursor = 0;
+unsigned long           HomeEasyByNoopy::receive_controller    = 0;
+unsigned int            HomeEasyByNoopy::receive_device        = 0;
+unsigned char           HomeEasyByNoopy::receive_onOff         = 0;
+unsigned char           HomeEasyByNoopy::receive_global        = 0;
+unsigned long           HomeEasyByNoopy::receive_commandFrame  = 0;
+unsigned char           HomeEasyByNoopy::receive_sreg          = 0;
+unsigned char           HomeEasyByNoopy::receive_disabled      = 0;
+HomeEasyByNoopyReceiver HomeEasyByNoopy::receive_handler       = 0;
 
-HomeEasyByNoopy::HomeEasyByNoopy(int pinOut, int pinIn) {
+HomeEasyByNoopy::HomeEasyByNoopy(int pinOut, int pinIn, HomeEasyByNoopyReceiver receiverHandler) {
 	_pinOut = pinOut;
 	pinMode(pinOut, OUTPUT);
 	setEmitFrameCount(10);
 	setListenPin(pinIn);
+	setReceiver(receiverHandler);
+	receive_disabled = 0;
+}
+
+void HomeEasyByNoopy::setReceiver(HomeEasyByNoopyReceiver receiverHandler) {
+	receive_handler = receiverHandler;
 }
 
 unsigned int HomeEasyByNoopy::getTimer() {
@@ -39,24 +46,28 @@ unsigned int HomeEasyByNoopy::getTimer() {
   sreg = SREG;
   cli();
   value = TCNT1; // read the timer
-  TCNT1 = 0x00; // reset the timer
+  TCNT1 = 0x00;  // reset the timer
   SREG = sreg;
   return value;
 }
 
+unsigned long HomeEasyByNoopy::getRaw() {
+	return receive_commandFrame;
+}
+
 void HomeEasyByNoopy::EnableRead(unsigned char onOffState) {
   if (onOffState) {
-    recieve_controller = 0;
-    recieve_device = 0;
-    recieve_onOff = 0;
-    recieve_global = 0;
-    recieve_commandFrame = 0;
-    recieve_command[0] = 0;
-    recieve_command[1] = 0;
-    recieve_commandCursor = 0;
-    recieve_isSignal = 0;
-    recieve_flags[0] = 0;
-    recieve_flags[1] = 0;
+    receive_controller = 0;
+    receive_device = 0;
+    receive_onOff = 0;
+    receive_global = 0;
+    receive_commandFrame = 0;
+    receive_command[0] = 0;
+    receive_command[1] = 0;
+    receive_commandCursor = 0;
+    receive_isSignal = 0;
+    receive_flags[0] = 0;
+    receive_flags[1] = 0;
     
     // Configure Timer
     TCCR1A = 0x00;
@@ -64,86 +75,93 @@ void HomeEasyByNoopy::EnableRead(unsigned char onOffState) {
     TCCR1C = 0x00;
     
     // Save interrupt state
-	recieve_sreg = SREG;
-    attachInterrupt(digitalPinToInterrupt(recieve_pin), HomeEasyByNoopy::process, CHANGE);
+	receive_sreg = SREG;
+    attachInterrupt(digitalPinToInterrupt(receive_pin), HomeEasyByNoopy::process, CHANGE);
   } else {
-    detachInterrupt(digitalPinToInterrupt(recieve_pin));
+    detachInterrupt(digitalPinToInterrupt(receive_pin));
     // Restaure interrupt state
-    SREG = recieve_sreg;
+    SREG = receive_sreg;
   }
 }
 
-void HomeEasyByNoopy::decoderecieve_command(unsigned long _recieve_command) {
-  recieve_commandFrame =  _recieve_command;
-  recieve_controller = (_recieve_command & 0xffffffc0) >> 6;
-  recieve_device = _recieve_command & 0xf;
-  recieve_onOff = (_recieve_command & 0x10) >> 4;
-  recieve_global = (_recieve_command & 0x20) >> 5;
+void HomeEasyByNoopy::decodereceive_command(unsigned long _receive_command) {
+  receive_commandFrame =  _receive_command;
+  receive_controller = (_receive_command & 0xffffffc0) >> 6;
+  receive_device = _receive_command & 0xf;
+  receive_onOff = (_receive_command & 0x10) >> 4;
+  receive_global = (_receive_command & 0x20) >> 5;
+  if (receive_handler) {
+	receive_handler(receive_controller, receive_device + (receive_global << 4), receive_onOff);
+  }
 }
 
 void HomeEasyByNoopy::process() {
   unsigned int count;
   unsigned char sreg;
+  if (receive_disabled) {
+	  receive_isSignal = 0;
+	  receive_commandCursor = 0;
+	  return;
+  }
   sreg = SREG;
   cli(); // Stops interrupts
-  recieve_flags[1] = digitalRead(recieve_pin);
-  if (recieve_flags[0] != recieve_flags[1]) {
+  receive_flags[1] = digitalRead(receive_pin);
+  if (receive_flags[0] != receive_flags[1]) {
     // state really changed
     count = getTimer();
     // check High level
-    if (recieve_flags[0] == 1) {
-      recieve_isSignal = (count>55) && (count<65);
+    if (receive_flags[0] == 1) {
+      receive_isSignal = (count>55) && (count<65);
     }
     // compute Low level
-    if ((recieve_flags[0] == 0) && (recieve_isSignal)) {
+    if ((receive_flags[0] == 0) && (receive_isSignal)) {
       if (count>2400) {
         // Start Emit
       }
       if ((count>600) && (count<700)) {
         // Start / End of frame
-        recieve_commandCursor = 0;
-        if ((recieve_command[0]) && (recieve_command[0] == recieve_command[1])) {
-          decoderecieve_command(recieve_command[0]);
+        receive_commandCursor = 0;
+        if ((receive_command[0]) && (receive_command[0] == receive_command[1])) {
+          decodereceive_command(receive_command[0]);
         }
-        recieve_command[1] = recieve_command[0];
-        recieve_command[0] = 0;
+        receive_command[1] = receive_command[0];
+        receive_command[0] = 0;
       }
       if ((count>50) && (count<100)) {
-        if (!(recieve_commandCursor & 1)) {
+        if (!(receive_commandCursor & 1)) {
           unsigned long _bit = 1;
-          recieve_command[0] &= ~(_bit << (31 - recieve_commandCursor/2));
+          receive_command[0] &= ~(_bit << (31 - receive_commandCursor/2));
         }
-        recieve_commandCursor++;
+        receive_commandCursor++;
       }
       if ((count>300) && (count<350)) {
-        if (!(recieve_commandCursor & 1)) {
+        if (!(receive_commandCursor & 1)) {
           unsigned long _bit = 1;
-          recieve_command[0] |= _bit << (31 - recieve_commandCursor/2);
+          receive_command[0] |= _bit << (31 - receive_commandCursor/2);
         }
-        recieve_commandCursor++;
+        receive_commandCursor++;
       }
 
-      if (recieve_commandCursor>64) {
+      if (receive_commandCursor>64) {
         // overflow !
-        recieve_commandCursor = 0;
+        receive_commandCursor = 0;
       }
     }
   }
-  recieve_flags[0] = recieve_flags[1];
+  receive_flags[0] = receive_flags[1];
   SREG = sreg; // enable interupts
 }
 
 void HomeEasyByNoopy::setListenPin(int pin) {
   // Configure read pin
-  recieve_pin = pin;
+  receive_pin = pin;
   pinMode(pin, INPUT);
 }
 
-unsigned char HomeEasyByNoopy::getRecieveCommand(unsigned long* controller, unsigned int* device, unsigned char* onOff, unsigned char* global) {
-  *controller = recieve_controller;
-  *device = recieve_device;
-  *onOff = recieve_onOff;
-  *global = recieve_global;
+unsigned char HomeEasyByNoopy::getReceiveCommand(unsigned long* controller, unsigned int* device, unsigned char* onOff) {
+  *controller = receive_controller;
+  *device = receive_device + (receive_global << 4);
+  *onOff = receive_onOff;
 }
 
 void HomeEasyByNoopy::setEmitFrameCount(int count) {
@@ -193,6 +211,7 @@ void HomeEasyByNoopy::sendFrame(int* frame, int count) {
   unsigned char sreg;
   sreg = SREG;
   cli(); // disable interupts
+  receive_disabled = 1; // Stop listening
   
   while (count-- > 0) {
     startEmit();
@@ -205,6 +224,7 @@ void HomeEasyByNoopy::sendFrame(int* frame, int count) {
     }
   }
   startEndFrame();
+  receive_disabled = 0; // Restore listening
   SREG = sreg; // enable interupts
 }
 

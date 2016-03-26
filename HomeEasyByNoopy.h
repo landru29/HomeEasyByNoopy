@@ -22,15 +22,19 @@
 
 #include "Arduino.h"
 
+typedef void (* HomeEasyByNoopyReceiver)(unsigned long controller, unsigned int device, unsigned char onOff);
+
 class HomeEasyByNoopy
 {
   public:
-    HomeEasyByNoopy (int pinOut, int pinIn);
+    HomeEasyByNoopy (int pinOut, int pinIn, HomeEasyByNoopyReceiver receiverHandler);
     
     void emit (unsigned long controller, unsigned char device, bool onOff);
     void setEmitFrameCount(int count);
     void EnableRead(unsigned char onOffState);
-    unsigned char getRecieveCommand(unsigned long* controller, unsigned int* device, unsigned char* onOff, unsigned char* global);
+    unsigned char getReceiveCommand(unsigned long* controller, unsigned int* device, unsigned char* onOff);
+    void setReceiver(HomeEasyByNoopyReceiver receiverHandler);
+    static unsigned long getRaw();
   
   private :
     int _pinOut;
@@ -39,24 +43,26 @@ class HomeEasyByNoopy
     void startEndFrame();
     void startEmit();
     static unsigned int getTimer();
-    static void decoderecieve_command(unsigned long _recieve_command);
+    static void decodereceive_command(unsigned long _receive_command);
     static void process();
     void setListenPin(int pin);
     static void setBit(int* framePart, bool state);
     void buildFrame(int* frame, unsigned long controller, unsigned char device, bool onOff);
     void sendFrame(int* frame, int count);
     
-    static int recieve_pin;
-    static unsigned char recieve_isSignal;
-    static unsigned char recieve_flags[2];
-    static unsigned long recieve_command[2];
-    static unsigned char recieve_commandCursor;
-    static unsigned long recieve_controller;
-    static unsigned int  recieve_device;
-    static unsigned char recieve_onOff;
-    static unsigned char recieve_global;
-    static unsigned long recieve_commandFrame;
-    static unsigned char recieve_sreg;
+    static int receive_pin;
+    static unsigned char receive_isSignal;
+    static unsigned char receive_flags[2];
+    static unsigned long receive_command[2];
+    static unsigned char receive_commandCursor;
+    static unsigned long receive_controller;
+    static unsigned int  receive_device;
+    static unsigned char receive_onOff;
+    static unsigned char receive_global;
+    static unsigned long receive_commandFrame;
+    static unsigned char receive_sreg;
+    static HomeEasyByNoopyReceiver receive_handler;
+    static unsigned char receive_disabled;
     
 };
 
