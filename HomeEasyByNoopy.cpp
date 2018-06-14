@@ -7,11 +7,11 @@ extern "C" {
   #include "Arduino.h"
 }
 
-const int _he_pulse_high  = 275;
-const int _he_pulse_low0  = 275;
-const int _he_pulse_low1  = 1225;
-const int _he_pulse_frame = 2675;
-const int _he_pulse_emit  = 9900;
+#define _he_pulse_high  275
+#define _he_pulse_low0  275
+#define _he_pulse_low1  1225
+#define _he_pulse_frame 2675
+#define _he_pulse_emit  9900
 
 int                     HomeEasyByNoopy::receive_pin           = 0;
 unsigned char           HomeEasyByNoopy::receive_isSignal      = 0;
@@ -71,7 +71,7 @@ void HomeEasyByNoopy::EnableRead(unsigned char onOffState) {
     
     // Configure Timer
     TCCR1A = 0x00;
-    TCCR1B = 0x03; // prescale to 64
+    TCCR1B = 0x02; // prescale to 8
     TCCR1C = 0x00;
     
     // Save interrupt state
@@ -111,14 +111,14 @@ void HomeEasyByNoopy::process() {
     count = getTimer();
     // check High level
     if (receive_flags[0] == 1) {
-      receive_isSignal = (count>55) && (count<65);
+      receive_isSignal = (count>500) && (count<600); // 275µs
     }
     // compute Low level
     if ((receive_flags[0] == 0) && (receive_isSignal)) {
-      if (count>2400) {
+      if (count>18000) {  //9900 µs
         // Start Emit
       }
-      if ((count>600) && (count<700)) {
+      if ((count>4800) && (count<5800)) { // 2675µs
         // Start / End of frame
         receive_commandCursor = 0;
         if ((receive_command[0]) && (receive_command[0] == receive_command[1])) {
@@ -127,14 +127,14 @@ void HomeEasyByNoopy::process() {
         receive_command[1] = receive_command[0];
         receive_command[0] = 0;
       }
-      if ((count>50) && (count<100)) {
+      if ((count>430) && (count<530)) { // 240µs
         if (!(receive_commandCursor & 1)) {
           unsigned long _bit = 1;
           receive_command[0] &= ~(_bit << (31 - receive_commandCursor/2));
         }
         receive_commandCursor++;
       }
-      if ((count>300) && (count<350)) {
+      if ((count>2300) && (count<2800)) { // 1300µs
         if (!(receive_commandCursor & 1)) {
           unsigned long _bit = 1;
           receive_command[0] |= _bit << (31 - receive_commandCursor/2);

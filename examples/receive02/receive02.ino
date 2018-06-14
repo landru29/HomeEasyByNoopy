@@ -17,7 +17,12 @@ void myHandler(unsigned long controller, unsigned int device, unsigned char onOf
   Serial.println(onOff);
 }
 
-HomeEasyByNoopy sender(4, 0, myHandler);
+HomeEasyByNoopy sender(4, 2, myHandler);
+/**
+ * 4 => emit pin 
+ * 2 => reveive pin. See https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
+ **/
+
 
 void setup() {
   Serial.begin(9600);
